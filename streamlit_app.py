@@ -2,10 +2,16 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import joblib
-from tensorflow.keras.models import load_model
+import tensorflow as tf
 
-# Load the saved model and preprocessing objects
-model = load_model('credit_risk_model.h5')
+# Load the saved TFLite model and preprocessing objects
+interpreter = tf.lite.Interpreter(model_path='credit_risk_model.tflite')
+interpreter.allocate_tensors()
+
+# Get input and output details for the TFLite model
+input_details = interpreter.get_input_details()
+output_details = interpreter.get_output_details()
+
 scaler = joblib.load('scaler.pkl')
 label_encoders = joblib.load('label_encoders.pkl')
 
@@ -66,8 +72,15 @@ input_scaled = scaler.transform(input_df)
 
 # Make prediction
 if st.button("Predict"):
-    prediction = (model.predict(input_scaled) > 0.5).astype("int32")[0][0]
-    if prediction == 1:
+    # Set the input tensor
+    interpreter.set_tensor(input_details[0]['index'], input_scaled.astype(np.float32))
+
+    # Run inference
+    interpreter.invoke()
+
+    # Get the prediction result
+    prediction = interpreter.get_tensor(output_details[0]['index'])[0][0]
+    if prediction > 0.5:
         st.error("The model predicts this applicant is a 'bad' client (high risk).")
     else:
         st.success("The model predicts this applicant is a 'good' client (low risk).")
